@@ -1,4 +1,23 @@
+# =====================================================================
+# 自动探测并绑定安卓原生中文矢量字体，彻底解决中文“豆腐块”方块乱码
+# =====================================================================
 import os
+from kivy.core.text import LabelBase, DEFAULT_FONT
+
+for _font_path in [
+    '/system/fonts/NotoSansSC-Regular.otf',
+    '/system/fonts/NotoSansCJK-Regular.ttc',
+    '/system/fonts/DroidSansFallback.ttf',
+    '/system/fonts/SourceHanSansCN-Regular.otf'
+]:
+    if os.path.exists(_font_path):
+        for _name in [DEFAULT_FONT, 'Roboto', 'msyh', 'SimHei', 'simhei']:
+            try:
+                LabelBase.register(_name, _font_path)
+            except Exception:
+                pass
+        break
+# =====================================================================
 import sys
 import time
 import json
