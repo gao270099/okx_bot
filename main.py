@@ -1287,4 +1287,33 @@ class OKXProQuantStationApp(App):
 
 
 if __name__ == '__main__':
-    OKXProQuantStationApp().run()
+    import traceback
+    try:
+        OKXProQuantStationApp().run()
+    except Exception as e:
+        err_msg = traceback.format_exc()
+        try:
+            with open('/sdcard/Download/okx_crash.txt', 'w', encoding='utf-8') as f:
+                f.write(err_msg)
+        except Exception:
+            pass
+
+        # 启动轻量应急界面在手机屏幕上显示错误
+        from kivy.app import App
+        from kivy.uix.scrollview import ScrollView
+        from kivy.uix.label import Label
+
+        class CrashDisplayApp(App):
+            def build(self):
+                scroll = ScrollView()
+                lbl = Label(
+                    text=f"[启动崩溃原因]\n\n{err_msg}",
+                    size_hint_y=None,
+                    text_size=(None, None),
+                    color=(1, 0.2, 0.2, 1)
+                )
+                lbl.bind(texture_size=lambda inst, val: setattr(lbl, 'size', val))
+                scroll.add_widget(lbl)
+                return scroll
+
+        CrashDisplayApp().run()
