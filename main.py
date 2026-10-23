@@ -143,7 +143,6 @@ from kivy.uix.popup import Popup
 from kivy.graphics import Color, RoundedRectangle, Line, Rectangle
 from kivy.clock import Clock
 
-# 参照 Clash Meta 的现代高质感调色板
 C_BG = (0.953, 0.961, 0.973, 1.0)           # 浅灰底色 (#F3F5F8)
 C_CARD = (1.0, 1.0, 1.0, 1.0)               # 纯白卡片 (#FFFFFF)
 C_CARD_HOVER = (0.965, 0.975, 0.988, 1.0)   # 悬停卡片底色
@@ -160,7 +159,6 @@ C_RED = (0.890, 0.220, 0.275, 1.0)          # 亏损/卖出红色 (#E33846)
 C_AMBER = (0.871, 0.518, 0.035, 1.0)        # 提示橙黄 (#DE8409)
 
 class ClashCard(BoxLayout):
-    """参照 Clash Meta 的大圆角纯白悬浮卡片"""
     def __init__(self, bg_color=C_CARD, border_color=C_BORDER, radius=[16], has_border=True, **kwargs):
         super().__init__(**kwargs)
         self.bg_color = bg_color
@@ -187,7 +185,6 @@ class ClashCard(BoxLayout):
 
 
 class ClashHeroCard(BoxLayout):
-    """参照 Clash Meta 顶部大状态卡片"""
     def __init__(self, bg_color=C_HERO_STANDBY, radius=[18], **kwargs):
         super().__init__(**kwargs)
         self.bg_color = bg_color
@@ -207,7 +204,6 @@ class ClashHeroCard(BoxLayout):
 
 
 class PillButton(Button):
-    """大圆角胶囊按钮"""
     def __init__(self, bg_color=(0.14, 0.18, 0.24, 1), radius=[16], **kwargs):
         super().__init__(**kwargs)
         self.background_normal = ''
@@ -251,7 +247,6 @@ class ModernSpinnerOption(SpinnerOption):
 
 
 class ProAreaSparklineWidget(Widget):
-    """现代高对比平滑走势图 (与纯白卡片融为一体)"""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.prices = []
@@ -303,12 +298,27 @@ class ProAreaSparklineWidget(Widget):
 # ==================== 3. 主程序 ====================
 class OKXProQuantStationApp(App):
     def on_pause(self):
-        """息屏与退到后台时保持 Python 代码持续运转，防止安卓挂起销毁"""
+        """手机息屏 / 切换到后台事件监听"""
+        self.last_pause_time = time.time()
+        t_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.last_pause_time))
+        self.append_log(f"【系统事件】手机进入息屏/后台模式 (触发时间: {t_str})，正在执行后台保活守护...")
         return True
+
+    def on_resume(self):
+        """手机亮屏 / 重新回到前台事件监听"""
+        now = time.time()
+        t_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now))
+        if hasattr(self, 'last_pause_time') and self.last_pause_time:
+            duration = int(now - self.last_pause_time)
+            status_desc = "策略执行中" if self.running else "待命中"
+            self.append_log(f"【系统事件】手机已亮屏恢复前台！息屏共持续 {duration} 秒 (状态: {status_desc}，恢复时间: {t_str})")
+        else:
+            self.append_log(f"【系统事件】应用已恢复前台运行 (时间: {t_str})")
 
     def build(self):
         self.title = "OKX Professional Intraday AI Quant Station"
         self.log_file_path = "bot_activity.log"
+        self.last_pause_time = None
         
         self.is_connected = False
         self.strategy_adopted = False
@@ -340,7 +350,6 @@ class OKXProQuantStationApp(App):
         self.current_symbol = ""
         self.market_monitor_active = True
 
-        # 根布局：纯净浅灰底
         self.root_layout = BoxLayout(orientation='vertical', padding=[16, 14, 16, 14], spacing=12)
         with self.root_layout.canvas.before:
             Color(*C_BG)
@@ -421,7 +430,6 @@ class OKXProQuantStationApp(App):
         self.content_container.add_widget(views[index])
 
     def init_dashboard_tab(self):
-        """【参照图核心版面】垂直滚动流式卡片架构"""
         self.view_dashboard = ScrollView(size_hint=(1, 1), do_scroll_x=False, do_scroll_y=True)
         dash_content = BoxLayout(orientation='vertical', spacing=14, size_hint_y=None, padding=[0, 2, 0, 10])
         dash_content.bind(minimum_height=dash_content.setter('height'))
@@ -694,7 +702,6 @@ class OKXProQuantStationApp(App):
             threading.Thread(target=do_clean, daemon=True).start()
 
     def init_orders_tab(self):
-        """【活跃挂单】纯白卡片式列表"""
         self.view_orders = ClashCard(orientation='vertical', padding=[24, 18, 24, 18], spacing=12)
         head = BoxLayout(size_hint_y=None, height=58, spacing=14)
         head.add_widget(LeftAlignedLabel(text="盘口活跃挂单监控", font_size=30, bold=True, color=C_TEXT_PRIMARY))
@@ -753,7 +760,6 @@ class OKXProQuantStationApp(App):
             self.orders_list_layout.add_widget(row)
 
     def init_api_tab(self):
-        """【API凭证】大圆角现代卡片表单"""
         self.view_api = ClashCard(orientation='vertical', padding=[36, 26, 36, 26], spacing=18)
         self.view_api.add_widget(LeftAlignedLabel(text="OKX 交易所安全连通中心", font_size=32, bold=True, color=C_TEXT_PRIMARY, size_hint_y=None, height=48))
         self.view_api.add_widget(LeftAlignedLabel(text="使用原生网络环境连通（支持科学上网），凭证已采用对称加密安全存储在沙盒中。", font_size=22, color=C_TEXT_MUTED, size_hint_y=None, height=32))
@@ -868,7 +874,6 @@ class OKXProQuantStationApp(App):
         self.append_log("已彻底清除本地保存的 API 凭据！")
 
     def init_pnl_tab(self):
-        """【盈亏分析】纯白卡片数据网格"""
         self.view_pnl = ClashCard(orientation='vertical', padding=[30, 22, 30, 22], spacing=14)
         self.view_pnl.add_widget(LeftAlignedLabel(text="多维策略净盈亏看板 (已扣除交易手续费)", font_size=30, bold=True, color=C_TEXT_PRIMARY, size_hint_y=None, height=48))
 
@@ -932,13 +937,12 @@ class OKXProQuantStationApp(App):
         Clock.schedule_once(lambda dt: setattr(self.pnl_dash_sub, 'text', f"已实现净利: {self.total_profit_usdt:+.4f} USDT ({self.total_arbitrage_count} 轮套利)"))
 
     def init_logs_tab(self):
-        """【系统日志】纯白外框 + 暗黑极客终端窗口"""
         self.view_logs = ClashCard(orientation='vertical', padding=[16, 14, 16, 14], spacing=10)
         self.view_logs.add_widget(LeftAlignedLabel(text="系统运行日志控制台", font_size=28, bold=True, color=C_TEXT_PRIMARY, size_hint_y=None, height=40))
         
         terminal_box = ClashCard(orientation='vertical', padding=[16, 12, 16, 12], bg_color=(0.08, 0.10, 0.14, 1), radius=[10], has_border=False)
         scroll = ScrollView(size_hint=(1, 1), do_scroll_x=False, do_scroll_y=True)
-        self.log_lbl = Label(text="[SYSTEM] 日内量化操盘工作站已就绪。所有策略算法均已载入。", font_size=22, color=(0.4, 0.85, 0.55, 1), size_hint=(1, None), halign='left', valign='top')
+        self.log_lbl = Label(text="[SYSTEM] 日内量化操盘工作站已就绪。息屏中断监控引擎已启动。", font_size=22, color=(0.4, 0.85, 0.55, 1), size_hint=(1, None), halign='left', valign='top')
         self.log_lbl.bind(width=lambda instance, value: setattr(instance, 'text_size', (value, None)))
         self.log_lbl.bind(texture_size=lambda instance, value: setattr(instance, 'height', value[1]))
         scroll.add_widget(self.log_lbl)
@@ -956,16 +960,99 @@ class OKXProQuantStationApp(App):
             pass
 
     def export_logs(self, instance=None):
+        """优化后的日志导出弹窗：支持自由选择目标存储目录、自定义文件名并点击确定导出"""
         if not os.path.exists(self.log_file_path):
-            self.append_log("尚无日志记录。")
+            self.show_info_popup("提示", "当前尚无任何运行日志记录。")
             return
-        export_name = f"OKX_Bot_Log_{time.strftime('%Y%m%d_%H%M%S')}.txt"
-        export_path = os.path.join(os.getcwd(), export_name)
-        try:
-            shutil.copyfile(self.log_file_path, export_path)
-            self.append_log(f"日志已成功导出至: {export_name}")
-        except Exception as e:
-            self.append_log(f"日志导出失败: {str(e)[:30]}")
+
+        box = BoxLayout(orientation='vertical', padding=[24, 20, 24, 20], spacing=14)
+        box.add_widget(LeftAlignedLabel(text="选择日志导出目标路径与文件名:", font_size=24, bold=True, color=C_TEXT_PRIMARY, size_hint_y=None, height=36))
+
+        dir_presets = {
+            '手机「下载」目录 (/sdcard/Download)': '/sdcard/Download',
+            '手机「文档」目录 (/sdcard/Documents)': '/sdcard/Documents',
+            '应用专属存储目录 (App Private)': os.getcwd(),
+        }
+
+        grid = GridLayout(cols=2, spacing=[16, 12], row_default_height=60, row_force_default=True, size_hint_y=None, height=130)
+        grid.add_widget(LeftAlignedLabel(text="存储位置:", font_size=22, bold=True, color=C_TEXT_PRIMARY))
+        
+        default_dir_choice = '手机「下载」目录 (/sdcard/Download)' if os.path.exists('/sdcard/Download') else '应用专属存储目录 (App Private)'
+        dir_spn = Spinner(
+            text=default_dir_choice,
+            values=tuple(dir_presets.keys()),
+            option_cls=ModernSpinnerOption,
+            background_normal='',
+            background_color=C_CARD_HOVER,
+            font_size=20,
+            color=C_TEXT_PRIMARY
+        )
+        grid.add_widget(dir_spn)
+
+        grid.add_widget(LeftAlignedLabel(text="导出文件名:", font_size=22, bold=True, color=C_TEXT_PRIMARY))
+        default_fname = f"OKX_Bot_Log_{time.strftime('%Y%m%d_%H%M%S')}.txt"
+        fname_in = TextInput(
+            text=default_fname,
+            multiline=False,
+            background_color=C_CARD_HOVER,
+            foreground_color=C_TEXT_PRIMARY,
+            font_size=20,
+            padding=[10, 14, 10, 14]
+        )
+        grid.add_widget(fname_in)
+        box.add_widget(grid)
+
+        preview_lbl = LeftAlignedLabel(
+            text=f"完整保存路径:\n{os.path.join(dir_presets.get(dir_spn.text, os.getcwd()), default_fname)}",
+            font_size=18,
+            color=C_TEXT_MUTED,
+            size_hint_y=None,
+            height=48
+        )
+        box.add_widget(preview_lbl)
+
+        def update_preview(*args):
+            chosen_dir = dir_presets.get(dir_spn.text, os.getcwd())
+            preview_lbl.text = f"完整保存路径:\n{os.path.join(chosen_dir, fname_in.text.strip())}"
+
+        dir_spn.bind(text=update_preview)
+        fname_in.bind(text=update_preview)
+
+        btn_box = BoxLayout(size_hint_y=None, height=60, spacing=16)
+        btn_confirm = PillButton(text="确定导出", bg_color=(0.063, 0.655, 0.388, 1), bold=True, font_size=24, radius=[12])
+        btn_cancel = PillButton(text="取消", bg_color=C_CARD_HOVER, font_size=24, radius=[12], size_hint_x=0.35, color=C_TEXT_MUTED)
+        btn_box.add_widget(btn_confirm)
+        btn_box.add_widget(btn_cancel)
+        box.add_widget(btn_box)
+
+        export_popup = Popup(title="导出运行日志至本地存储", content=box, size_hint=(0.90, 0.56), auto_dismiss=False)
+
+        def do_export(btn):
+            chosen_dir = dir_presets.get(dir_spn.text, os.getcwd())
+            fname = fname_in.text.strip() or f"OKX_Bot_Log_{int(time.time())}.txt"
+            target_path = os.path.join(chosen_dir, fname)
+
+            try:
+                os.makedirs(chosen_dir, exist_ok=True)
+                shutil.copyfile(self.log_file_path, target_path)
+                size_kb = os.path.getsize(target_path) / 1024.0
+                export_popup.dismiss()
+                self.append_log(f"【日志导出成功】文件已保存至: {target_path} (大小: {size_kb:.1f} KB)")
+                self.show_info_popup("导出成功", f"日志文件已成功导出！\n\n路径: {target_path}\n大小: {size_kb:.1f} KB")
+            except Exception as e:
+                fallback_path = os.path.join(os.getcwd(), fname)
+                try:
+                    shutil.copyfile(self.log_file_path, fallback_path)
+                    export_popup.dismiss()
+                    self.append_log(f"【公共存储权限受限】已自动转存至应用私有目录: {fallback_path}")
+                    self.show_info_popup("导出提示", f"公共目录受系统权限限制无法直写，\n已自动安全转存至应用内部目录：\n{fallback_path}")
+                except Exception as ex2:
+                    self.append_log(f"【导出失败】: {str(ex2)[:40]}")
+                    self.show_info_popup("导出失败", f"无法写入目标路径，原因:\n{str(e)[:100]}")
+
+        btn_confirm.bind(on_press=do_export)
+        btn_cancel.bind(on_press=export_popup.dismiss)
+        export_popup.open()
 
     def analyze_intraday_market_regime(self, ohlcv, funding_rate=0.0):
         closes = [c[4] for c in ohlcv]
@@ -1071,7 +1158,17 @@ class OKXProQuantStationApp(App):
                 self.ai_suggested_sl = metrics['sl']
 
                 Clock.schedule_once(lambda dt, r=f"AI 日内诊断 [{tf}]: {metrics['reason']}": setattr(self.ai_recommend_lbl, 'text', r))
-                time.sleep(8)
+                
+                # 细粒度睡眠切片 + 息屏中断感知检测
+                for _ in range(8):
+                    if not self.market_monitor_active or not self.is_connected:
+                        break
+                    t0 = time.time()
+                    time.sleep(1)
+                    elapsed = time.time() - t0
+                    if elapsed > 4.5:
+                        gap_sec = elapsed - 1.0
+                        self.append_log(f"【息屏中断感知】行情线程检测到系统休眠挂起 {gap_sec:.1f} 秒，现已恢复轮询。")
             except Exception:
                 time.sleep(10)
 
@@ -1462,7 +1559,12 @@ class OKXProQuantStationApp(App):
                     for _ in range(10):
                         if not self.running:
                             break
+                        t0 = time.time()
                         time.sleep(1)
+                        elapsed = time.time() - t0
+                        if elapsed > 4.5:
+                            gap_sec = elapsed - 1.0
+                            self.append_log(f"【息屏中断感知】策略执行线程检测到系统休眠挂起 {gap_sec:.1f} 秒，现已苏醒恢复运行。")
 
                 except Exception as loop_err:
                     consecutive_net_errors += 1
