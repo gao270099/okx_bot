@@ -17,6 +17,17 @@ for _font_path in [
             except Exception:
                 pass
         break
+
+if os.name == 'nt':
+    font_paths = [
+        'C:\\Windows\\Fonts\\msyh.ttc',
+        'C:\\Windows\\Fonts\\msyh.ttf',
+        'C:\\Windows\\Fonts\\simsun.ttc',
+    ]
+    for path in font_paths:
+        if os.path.exists(path):
+            LabelBase.register(name='Roboto', fn_regular=path)
+            break
 # =====================================================================
 import sys
 import time
@@ -24,18 +35,14 @@ import json
 import math
 import shutil
 import threading
-# =====================================================================
-# 原生轻量加密引擎（100% 兼容原代码的 Fernet 调用，彻底避免安卓底层 Rust 崩溃）
-# =====================================================================
 import base64
 import hashlib
-import os
 
+# ==================== 0. 原生轻量加密引擎 ====================
 class Fernet:
     def __init__(self, key):
         if isinstance(key, str):
             key = key.encode()
-        # 使用 SHA-256 生成安全的 32 字节哈希秘钥
         self._key = hashlib.sha256(key).digest()
 
     @staticmethod
@@ -45,7 +52,6 @@ class Fernet:
     def encrypt(self, data):
         if isinstance(data, str):
             data = data.encode()
-        # 原生流式掩码加密，安卓沙盒内绝对私密且不依赖任何外部 .so 动态库
         encrypted = bytes([b ^ self._key[i % len(self._key)] for i, b in enumerate(data)])
         return base64.urlsafe_b64encode(encrypted)
 
@@ -55,10 +61,10 @@ class Fernet:
         raw = base64.urlsafe_b64decode(token)
         decrypted = bytes([b ^ self._key[i % len(self._key)] for i, b in enumerate(raw)])
         return decrypted
-# =====================================================================
+
 import ccxt
 
-# ==================== 0. 安全凭证管理器 ====================
+# ==================== 1. 安全凭证管理器 ====================
 class CredentialManager:
     KEY_FILE = ".quant_key.bin"
     CRED_FILE = "okx_credentials.enc"
@@ -123,20 +129,7 @@ class CredentialManager:
                 except Exception:
                     pass
 
-# ==================== 1. Windows/Android 字体跨平台兼容 ====================
-if os.name == 'nt':
-    from kivy.core.text import LabelBase
-    font_paths = [
-        'C:\\Windows\\Fonts\\msyh.ttc',
-        'C:\\Windows\\Fonts\\msyh.ttf',
-        'C:\\Windows\\Fonts\\simsun.ttc',
-    ]
-    for path in font_paths:
-        if os.path.exists(path):
-            LabelBase.register(name='Roboto', fn_regular=path)
-            break
-
-# ==================== 2. 专业 UI 组件与现代设计系统 ====================
+# ==================== 2. Clash Meta for Android 极简现代设计系统 ====================
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
@@ -150,39 +143,72 @@ from kivy.uix.popup import Popup
 from kivy.graphics import Color, RoundedRectangle, Line, Rectangle
 from kivy.clock import Clock
 
-C_BG = (0.043, 0.055, 0.078, 1)
-C_SURFACE = (0.082, 0.102, 0.137, 1)
-C_SURFACE_HOVER = (0.118, 0.145, 0.188, 1)
-C_BORDER = (0.165, 0.196, 0.247, 1)
-C_TEXT_PRIMARY = (0.94, 0.96, 0.98, 1)
-C_TEXT_MUTED = (0.50, 0.56, 0.63, 1)
-C_ACCENT_CYAN = (0.0, 0.82, 0.83, 1)
-C_GREEN = (0.0, 0.94, 0.56, 1)
-C_RED = (1.0, 0.28, 0.34, 1)
-C_AMBER = (1.0, 0.66, 0.0, 1)
+# 参照 Clash Meta 的现代高质感调色板
+C_BG = (0.953, 0.961, 0.973, 1.0)           # 浅灰底色 (#F3F5F8)
+C_CARD = (1.0, 1.0, 1.0, 1.0)               # 纯白卡片 (#FFFFFF)
+C_CARD_HOVER = (0.965, 0.975, 0.988, 1.0)   # 悬停卡片底色
+C_BORDER = (0.882, 0.902, 0.925, 1.0)       # 边框浅灰线 (#E1E6EC)
+C_HERO_STANDBY = (0.110, 0.263, 0.455, 1.0) # 参照图深蓝 (#1C4374)
+C_HERO_RUNNING = (0.055, 0.380, 0.247, 1.0) # 运行中翡翠绿 (#0E613F)
+C_HERO_ALERT = (0.750, 0.200, 0.200, 1.0)   # 停止/告警酒红 (#C03333)
 
+C_TEXT_PRIMARY = (0.118, 0.161, 0.231, 1.0) # 标题主文字 (#1E293B)
+C_TEXT_MUTED = (0.435, 0.494, 0.580, 1.0)   # 副标题灰字 (#6F7E94)
+C_ACCENT_BLUE = (0.118, 0.388, 0.886, 1.0)  # 强调亮蓝
+C_GREEN = (0.063, 0.655, 0.388, 1.0)        # 盈利/买入绿色 (#10A763)
+C_RED = (0.890, 0.220, 0.275, 1.0)          # 亏损/卖出红色 (#E33846)
+C_AMBER = (0.871, 0.518, 0.035, 1.0)        # 提示橙黄 (#DE8409)
 
-class ModernCard(BoxLayout):
-    def __init__(self, bg_color=C_SURFACE, border_color=C_BORDER, radius=[10], **kwargs):
+class ClashCard(BoxLayout):
+    """参照 Clash Meta 的大圆角纯白悬浮卡片"""
+    def __init__(self, bg_color=C_CARD, border_color=C_BORDER, radius=[16], has_border=True, **kwargs):
         super().__init__(**kwargs)
         self.bg_color = bg_color
         self.border_color = border_color
         self.radius = radius
+        self.has_border = has_border
         with self.canvas.before:
             self.c_bg = Color(*self.bg_color)
             self.rect = RoundedRectangle(pos=self.pos, size=self.size, radius=self.radius)
-            self.c_br = Color(*self.border_color)
-            self.border = Line(rounded_rectangle=(self.x, self.y, max(1, self.width), max(1, self.height), self.radius[0]), width=1.0)
+            if self.has_border:
+                self.c_br = Color(*self.border_color)
+                self.border = Line(rounded_rectangle=(self.x, self.y, max(1, self.width), max(1, self.height), self.radius[0]), width=1.0)
         self.bind(pos=self._update_geom, size=self._update_geom)
 
     def _update_geom(self, *args):
         self.rect.pos = self.pos
         self.rect.size = self.size
-        self.border.rounded_rectangle = (self.x, self.y, max(1, self.width), max(1, self.height), self.radius[0])
+        if self.has_border:
+            self.border.rounded_rectangle = (self.x, self.y, max(1, self.width), max(1, self.height), self.radius[0])
+
+    def set_bg(self, color):
+        self.bg_color = color
+        self.c_bg.rgba = color
 
 
-class FlatButton(Button):
-    def __init__(self, bg_color=(0.14, 0.18, 0.24, 1), radius=[8], **kwargs):
+class ClashHeroCard(BoxLayout):
+    """参照 Clash Meta 顶部大状态卡片"""
+    def __init__(self, bg_color=C_HERO_STANDBY, radius=[18], **kwargs):
+        super().__init__(**kwargs)
+        self.bg_color = bg_color
+        self.radius = radius
+        with self.canvas.before:
+            self.c_bg = Color(*self.bg_color)
+            self.rect = RoundedRectangle(pos=self.pos, size=self.size, radius=self.radius)
+        self.bind(pos=self._update_geom, size=self._update_geom)
+
+    def _update_geom(self, *args):
+        self.rect.pos = self.pos
+        self.rect.size = self.size
+
+    def set_bg(self, color):
+        self.bg_color = color
+        self.c_bg.rgba = color
+
+
+class PillButton(Button):
+    """大圆角胶囊按钮"""
+    def __init__(self, bg_color=(0.14, 0.18, 0.24, 1), radius=[16], **kwargs):
         super().__init__(**kwargs)
         self.background_normal = ''
         self.background_down = ''
@@ -220,11 +246,12 @@ class ModernSpinnerOption(SpinnerOption):
         self.font_size = 24
         self.height = 58
         self.background_normal = ''
-        self.background_color = (0.12, 0.15, 0.20, 1)
+        self.background_color = C_CARD_HOVER
         self.color = C_TEXT_PRIMARY
 
 
 class ProAreaSparklineWidget(Widget):
+    """现代高对比平滑走势图 (与纯白卡片融为一体)"""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.prices = []
@@ -240,15 +267,15 @@ class ProAreaSparklineWidget(Widget):
             return
 
         with self.canvas:
-            Color(0.06, 0.075, 0.10, 1)
-            Rectangle(pos=self.pos, size=self.size)
+            Color(0.965, 0.973, 0.985, 1)
+            RoundedRectangle(pos=self.pos, size=self.size, radius=[12])
 
             min_p = min(self.prices)
             max_p = max(self.prices)
             diff = max_p - min_p if max_p != min_p else 1.0
 
-            padding_x = 24
-            padding_y = 24
+            padding_x = 20
+            padding_y = 20
             w = max(1, self.width - 2 * padding_x)
             h = max(1, self.height - 2 * padding_y)
 
@@ -266,15 +293,19 @@ class ProAreaSparklineWidget(Widget):
                 flat_pts.extend([px, py])
 
             Color(*line_color)
-            Line(points=flat_pts, width=2.4)
+            Line(points=flat_pts, width=2.6)
 
             last_y = pts[-1][1]
             Color(line_color[0], line_color[1], line_color[2], 0.35)
-            Line(points=[self.x, last_y, self.right, last_y], width=1.2)
+            Line(points=[self.x + 8, last_y, self.right - 8, last_y], width=1.2)
 
 
 # ==================== 3. 主程序 ====================
 class OKXProQuantStationApp(App):
+    def on_pause(self):
+        """息屏与退到后台时保持 Python 代码持续运转，防止安卓挂起销毁"""
+        return True
+
     def build(self):
         self.title = "OKX Professional Intraday AI Quant Station"
         self.log_file_path = "bot_activity.log"
@@ -309,25 +340,27 @@ class OKXProQuantStationApp(App):
         self.current_symbol = ""
         self.market_monitor_active = True
 
+        # 根布局：纯净浅灰底
         self.root_layout = BoxLayout(orientation='vertical', padding=[16, 14, 16, 14], spacing=12)
         with self.root_layout.canvas.before:
             Color(*C_BG)
             self.root_bg = Rectangle(pos=self.root_layout.pos, size=self.root_layout.size)
         self.root_layout.bind(pos=self._update_root_bg, size=self._update_root_bg)
 
-        header_bar = BoxLayout(size_hint_y=None, height=76, spacing=14)
-        brand_box = BoxLayout(size_hint_x=0.26, spacing=8)
-        brand_title = Label(text="OKX INTRADAY AI", font_size=30, bold=True, color=C_TEXT_PRIMARY, halign='left')
+        # 顶部品牌栏与胶囊导航栏
+        header_bar = BoxLayout(size_hint_y=None, height=68, spacing=12)
+        brand_box = BoxLayout(size_hint_x=0.28, spacing=8)
+        brand_title = Label(text="OKX Meta Quant", font_size=32, bold=True, color=C_TEXT_PRIMARY, halign='left')
         brand_title.bind(size=brand_title.setter('text_size'))
         brand_box.add_widget(brand_title)
         header_bar.add_widget(brand_box)
 
-        self.tabs_bar = ModernCard(bg_color=C_SURFACE, radius=[10], size_hint_x=0.74, padding=[4, 4, 4, 4], spacing=6)
-        self.btn_tab_dashboard = FlatButton(text="操盘终端", font_size=26, bold=True, bg_color=C_SURFACE_HOVER)
-        self.btn_tab_orders = FlatButton(text="活跃挂单", font_size=26, bold=True, bg_color=(0, 0, 0, 0))
-        self.btn_tab_api = FlatButton(text="API凭证", font_size=26, bold=True, bg_color=(0, 0, 0, 0))
-        self.btn_tab_pnl = FlatButton(text="盈亏分析", font_size=26, bold=True, bg_color=(0, 0, 0, 0))
-        self.btn_tab_logs = FlatButton(text="系统日志", font_size=26, bold=True, bg_color=(0, 0, 0, 0))
+        self.tabs_bar = ClashCard(bg_color=C_CARD, radius=[14], size_hint_x=0.72, padding=[4, 4, 4, 4], spacing=6)
+        self.btn_tab_dashboard = PillButton(text="操盘终端", font_size=24, bold=True, bg_color=(0.88, 0.92, 0.98, 1), radius=[10], color=C_ACCENT_BLUE)
+        self.btn_tab_orders = PillButton(text="活跃挂单", font_size=24, bold=True, bg_color=(0, 0, 0, 0), radius=[10], color=C_TEXT_MUTED)
+        self.btn_tab_api = PillButton(text="API凭证", font_size=24, bold=True, bg_color=(0, 0, 0, 0), radius=[10], color=C_TEXT_MUTED)
+        self.btn_tab_pnl = PillButton(text="盈亏分析", font_size=24, bold=True, bg_color=(0, 0, 0, 0), radius=[10], color=C_TEXT_MUTED)
+        self.btn_tab_logs = PillButton(text="系统日志", font_size=24, bold=True, bg_color=(0, 0, 0, 0), radius=[10], color=C_TEXT_MUTED)
 
         self.btn_tab_dashboard.bind(on_press=lambda x: self.switch_tab(0))
         self.btn_tab_orders.bind(on_press=lambda x: self.switch_tab(1))
@@ -343,14 +376,15 @@ class OKXProQuantStationApp(App):
         header_bar.add_widget(self.tabs_bar)
         self.root_layout.add_widget(header_bar)
 
-        self.content_container = BoxLayout(orientation='vertical', size_hint_y=0.83)
+        self.content_container = BoxLayout(orientation='vertical', size_hint_y=0.84)
         self.root_layout.add_widget(self.content_container)
 
-        bottom_bar = BoxLayout(size_hint_y=None, height=80, spacing=16)
-        self.toggle_btn = FlatButton(text="启动日内高胜率策略", size_hint_x=0.72, bg_color=(0.04, 0.55, 0.32, 1), font_size=34, bold=True, radius=[10])
+        # 底部大胶囊控制按钮
+        bottom_bar = BoxLayout(size_hint_y=None, height=72, spacing=14)
+        self.toggle_btn = PillButton(text="启动日内高胜率策略", size_hint_x=0.72, bg_color=(0.063, 0.655, 0.388, 1), font_size=30, bold=True, radius=[16], color=(1, 1, 1, 1))
         self.toggle_btn.bind(on_press=self.toggle_bot)
 
-        self.export_btn = FlatButton(text="导出运行日志", size_hint_x=0.28, bg_color=(0.14, 0.28, 0.44, 1), font_size=30, bold=True, radius=[10])
+        self.export_btn = PillButton(text="导出日志", size_hint_x=0.28, bg_color=(0.18, 0.26, 0.38, 1), font_size=28, bold=True, radius=[16], color=(1, 1, 1, 1))
         self.export_btn.bind(on_press=self.export_logs)
 
         bottom_bar.add_widget(self.toggle_btn)
@@ -378,8 +412,8 @@ class OKXProQuantStationApp(App):
 
         for i, b in enumerate(buttons):
             if i == index:
-                b.set_bg(C_SURFACE_HOVER)
-                b.color = C_ACCENT_CYAN
+                b.set_bg((0.88, 0.92, 0.98, 1))
+                b.color = C_ACCENT_BLUE
             else:
                 b.set_bg((0, 0, 0, 0))
                 b.color = C_TEXT_MUTED
@@ -387,54 +421,137 @@ class OKXProQuantStationApp(App):
         self.content_container.add_widget(views[index])
 
     def init_dashboard_tab(self):
-        self.view_dashboard = BoxLayout(orientation='vertical', spacing=10)
-        kpi_row = GridLayout(cols=4, spacing=10, size_hint_y=0.30)
+        """【参照图核心版面】垂直滚动流式卡片架构"""
+        self.view_dashboard = ScrollView(size_hint=(1, 1), do_scroll_x=False, do_scroll_y=True)
+        dash_content = BoxLayout(orientation='vertical', spacing=14, size_hint_y=None, padding=[0, 2, 0, 10])
+        dash_content.bind(minimum_height=dash_content.setter('height'))
+
+        # 1. 顶部大状态卡片 (Hero Card)
+        self.hero_card = ClashHeroCard(orientation='horizontal', padding=[24, 20, 24, 20], spacing=18, size_hint_y=None, height=130)
         
-        c1 = ModernCard(orientation='vertical', padding=[18, 14, 18, 14], spacing=6)
-        c1.add_widget(LeftAlignedLabel(text="SYSTEM STATUS", font_size=20, bold=True, color=C_TEXT_MUTED))
-        self.status_lbl = LeftAlignedLabel(text="未接入交易所", font_size=30, color=C_AMBER, bold=True)
-        c1.add_widget(self.status_lbl)
-        kpi_row.add_widget(c1)
+        status_icon_box = BoxLayout(size_hint=(None, None), size=(68, 68), pos_hint={'center_y': 0.5})
+        with status_icon_box.canvas.before:
+            Color(1, 1, 1, 0.18)
+            self.hero_icon_bg = RoundedRectangle(pos=status_icon_box.pos, size=status_icon_box.size, radius=[34])
+        status_icon_box.bind(pos=lambda inst, val: setattr(self.hero_icon_bg, 'pos', val))
+        
+        self.hero_icon_lbl = Label(text="✓", font_size=40, bold=True, color=(1, 1, 1, 1))
+        status_icon_box.add_widget(self.hero_icon_lbl)
+        self.hero_card.add_widget(status_icon_box)
 
-        c2 = ModernCard(orientation='vertical', padding=[18, 14, 18, 14], spacing=6)
-        c2.add_widget(LeftAlignedLabel(text="STRATEGY ENGINE", font_size=20, bold=True, color=C_TEXT_MUTED))
-        self.symbol_mode_lbl = LeftAlignedLabel(text="【AI自适应】ETH/USDT", font_size=30, color=C_ACCENT_CYAN, bold=True)
-        c2.add_widget(self.symbol_mode_lbl)
-        kpi_row.add_widget(c2)
+        hero_text_box = BoxLayout(orientation='vertical', spacing=4, pos_hint={'center_y': 0.5})
+        self.status_lbl = LeftAlignedLabel(text="未接入交易所", font_size=32, bold=True, color=(1, 1, 1, 1))
+        self.hero_sub_lbl = LeftAlignedLabel(text="ETH: 0.00  |  可用余额: -- USDT", font_size=20, color=(0.85, 0.92, 1.0, 0.9))
+        hero_text_box.add_widget(self.status_lbl)
+        hero_text_box.add_widget(self.hero_sub_lbl)
+        self.hero_card.add_widget(hero_text_box)
+        dash_content.add_widget(self.hero_card)
 
-        c3 = ModernCard(orientation='vertical', padding=[18, 14, 18, 14], spacing=6)
-        c3.add_widget(LeftAlignedLabel(text="MARKET PRICE (USDT)", font_size=20, bold=True, color=C_TEXT_MUTED))
-        self.price_lbl = LeftAlignedLabel(text="0.00", font_size=46, color=C_GREEN, bold=True)
-        c3.add_widget(self.price_lbl)
-        kpi_row.add_widget(c3)
+        # 2. 策略引擎独立卡片
+        strat_card = ClashCard(orientation='horizontal', padding=[22, 16, 22, 16], spacing=16, size_hint_y=None, height=92)
+        
+        strat_icon_box = BoxLayout(size_hint=(None, None), size=(54, 54), pos_hint={'center_y': 0.5})
+        with strat_icon_box.canvas.before:
+            Color(0.92, 0.95, 0.99, 1)
+            self.strat_icon_bg = RoundedRectangle(pos=strat_icon_box.pos, size=strat_icon_box.size, radius=[12])
+        strat_icon_box.bind(pos=lambda inst, val: setattr(self.strat_icon_bg, 'pos', val))
+        strat_icon_box.add_widget(Label(text="⊞", font_size=34, bold=True, color=C_ACCENT_BLUE))
+        strat_card.add_widget(strat_icon_box)
 
-        c4 = ModernCard(orientation='vertical', padding=[18, 14, 18, 14], spacing=6)
-        c4.add_widget(LeftAlignedLabel(text="FREE USDT / ORDERS", font_size=20, bold=True, color=C_TEXT_MUTED))
-        self.balance_lbl = LeftAlignedLabel(text="-- USDT (0 笔)", font_size=30, color=C_TEXT_PRIMARY, bold=True)
-        c4.add_widget(self.balance_lbl)
-        kpi_row.add_widget(c4)
+        strat_text_box = BoxLayout(orientation='vertical', spacing=2, pos_hint={'center_y': 0.5})
+        strat_text_box.add_widget(LeftAlignedLabel(text="策略决策引擎 (Strategy Engine)", font_size=24, bold=True, color=C_TEXT_PRIMARY))
+        self.symbol_mode_lbl = LeftAlignedLabel(text="【AI自适应】ETH/USDT  |  3m 周期", font_size=19, color=C_TEXT_MUTED)
+        strat_text_box.add_widget(self.symbol_mode_lbl)
+        strat_card.add_widget(strat_text_box)
 
-        self.view_dashboard.add_widget(kpi_row)
+        btn_cfg = PillButton(text="配置参数", size_hint=(None, None), size=(130, 48), pos_hint={'center_y': 0.5}, bg_color=(0.92, 0.95, 0.99, 1), font_size=20, bold=True, radius=[10], color=C_ACCENT_BLUE)
+        btn_cfg.bind(on_press=self.open_unified_strategy_popup)
+        strat_card.add_widget(btn_cfg)
+        dash_content.add_widget(strat_card)
 
-        main_chart_card = ModernCard(orientation='vertical', padding=[20, 16, 20, 16], spacing=10, size_hint_y=0.70)
-        ai_box = BoxLayout(size_hint_y=None, height=64, spacing=14)
-        self.ai_recommend_lbl = LeftAlignedLabel(text="AI 日内诊断: 正在分析盘口走势、均线动量与费率...", font_size=26, color=C_AMBER, bold=True)
-        self.btn_apply_ai = FlatButton(text="配置策略参数", size_hint_x=0.28, bg_color=(0.10, 0.38, 0.65, 1), font_size=26, bold=True, radius=[8])
-        self.btn_apply_ai.bind(on_press=self.open_unified_strategy_popup)
-        ai_box.add_widget(self.ai_recommend_lbl)
-        ai_box.add_widget(self.btn_apply_ai)
-        main_chart_card.add_widget(ai_box)
+        # 3. 走势图与 AI 诊断大卡片
+        chart_card = ClashCard(orientation='vertical', padding=[20, 16, 20, 16], spacing=10, size_hint_y=None, height=360)
+        
+        chart_top = BoxLayout(size_hint_y=None, height=44, spacing=10)
+        chart_title = LeftAlignedLabel(text="盘口实时走势 (Real-time Flow)", font_size=22, bold=True, color=C_TEXT_PRIMARY)
+        self.price_lbl = Label(text="0.00", font_size=30, bold=True, color=C_GREEN, size_hint_x=0.45, halign='right')
+        self.price_lbl.bind(size=self.price_lbl.setter('text_size'))
+        chart_top.add_widget(chart_title)
+        chart_top.add_widget(self.price_lbl)
+        chart_card.add_widget(chart_top)
 
         self.chart_widget = ProAreaSparklineWidget(size_hint_y=1)
-        main_chart_card.add_widget(self.chart_widget)
+        chart_card.add_widget(self.chart_widget)
 
-        h_scroll = ScrollView(size_hint_y=None, height=54, do_scroll_x=True, do_scroll_y=False)
-        self.strategy_details_lbl = Label(text="当前运行策略明细: 【AI日内自适应决策模式已待命】", font_size=26, color=C_TEXT_MUTED, size_hint_x=None, valign='middle')
-        self.strategy_details_lbl.bind(texture_size=self.strategy_details_lbl.setter('size'))
-        h_scroll.add_widget(self.strategy_details_lbl)
-        main_chart_card.add_widget(h_scroll)
+        self.ai_recommend_lbl = LeftAlignedLabel(text="AI 日内诊断: 正在分析盘口走势、均线动量与费率...", font_size=20, color=C_AMBER, bold=True, size_hint_y=None, height=36)
+        chart_card.add_widget(self.ai_recommend_lbl)
 
-        self.view_dashboard.add_widget(main_chart_card)
+        self.strategy_details_lbl = LeftAlignedLabel(text="● 策略待命: 启动后自动根据波动率自适应布设盘口挂单", font_size=18, color=C_TEXT_MUTED, size_hint_y=None, height=30)
+        chart_card.add_widget(self.strategy_details_lbl)
+        dash_content.add_widget(chart_card)
+
+        # 4. 快捷功能卡片列表
+        api_card = ClashCard(orientation='horizontal', padding=[22, 14, 22, 14], spacing=16, size_hint_y=None, height=84)
+        api_icon_box = BoxLayout(size_hint=(None, None), size=(48, 48), pos_hint={'center_y': 0.5})
+        with api_icon_box.canvas.before:
+            Color(0.95, 0.96, 0.98, 1)
+            self.api_icon_bg = RoundedRectangle(pos=api_icon_box.pos, size=api_icon_box.size, radius=[10])
+        api_icon_box.bind(pos=lambda inst, val: setattr(self.api_icon_bg, 'pos', val))
+        api_icon_box.add_widget(Label(text="🔑", font_size=26))
+        api_card.add_widget(api_icon_box)
+
+        api_text_box = BoxLayout(orientation='vertical', spacing=2, pos_hint={'center_y': 0.5})
+        api_text_box.add_widget(LeftAlignedLabel(text="OKX 账户凭据 (API Credentials)", font_size=22, bold=True, color=C_TEXT_PRIMARY))
+        self.api_status_sub = LeftAlignedLabel(text="未接入 (点击前往「API凭证」填入并连接)", font_size=18, color=C_TEXT_MUTED)
+        api_text_box.add_widget(self.api_status_sub)
+        api_card.add_widget(api_text_box)
+
+        btn_go_api = PillButton(text="查看", size_hint=(None, None), size=(86, 42), pos_hint={'center_y': 0.5}, bg_color=C_CARD_HOVER, font_size=18, color=C_TEXT_MUTED, radius=[8])
+        btn_go_api.bind(on_press=lambda x: self.switch_tab(2))
+        api_card.add_widget(btn_go_api)
+        dash_content.add_widget(api_card)
+
+        orders_card = ClashCard(orientation='horizontal', padding=[22, 14, 22, 14], spacing=16, size_hint_y=None, height=84)
+        orders_icon_box = BoxLayout(size_hint=(None, None), size=(48, 48), pos_hint={'center_y': 0.5})
+        with orders_icon_box.canvas.before:
+            Color(0.95, 0.96, 0.98, 1)
+            self.ord_icon_bg = RoundedRectangle(pos=orders_icon_box.pos, size=orders_icon_box.size, radius=[10])
+        orders_icon_box.bind(pos=lambda inst, val: setattr(self.ord_icon_bg, 'pos', val))
+        orders_icon_box.add_widget(Label(text="📋", font_size=26))
+        orders_card.add_widget(orders_icon_box)
+
+        orders_text_box = BoxLayout(orientation='vertical', spacing=2, pos_hint={'center_y': 0.5})
+        orders_text_box.add_widget(LeftAlignedLabel(text="活跃挂单监控 (Live Orders)", font_size=22, bold=True, color=C_TEXT_PRIMARY))
+        self.balance_lbl = LeftAlignedLabel(text="当前盘口: 0 笔挂单  |  可用: -- USDT", font_size=18, color=C_TEXT_MUTED)
+        orders_text_box.add_widget(self.balance_lbl)
+        orders_card.add_widget(orders_text_box)
+
+        btn_go_orders = PillButton(text="管理", size_hint=(None, None), size=(86, 42), pos_hint={'center_y': 0.5}, bg_color=C_CARD_HOVER, font_size=18, color=C_TEXT_MUTED, radius=[8])
+        btn_go_orders.bind(on_press=lambda x: self.switch_tab(1))
+        orders_card.add_widget(btn_go_orders)
+        dash_content.add_widget(orders_card)
+
+        pnl_card = ClashCard(orientation='horizontal', padding=[22, 14, 22, 14], spacing=16, size_hint_y=None, height=84)
+        pnl_icon_box = BoxLayout(size_hint=(None, None), size=(48, 48), pos_hint={'center_y': 0.5})
+        with pnl_icon_box.canvas.before:
+            Color(0.95, 0.96, 0.98, 1)
+            self.pnl_icon_bg = RoundedRectangle(pos=pnl_icon_box.pos, size=pnl_icon_box.size, radius=[10])
+        pnl_icon_box.bind(pos=lambda inst, val: setattr(self.pnl_icon_bg, 'pos', val))
+        pnl_icon_box.add_widget(Label(text="📈", font_size=26))
+        pnl_card.add_widget(pnl_icon_box)
+
+        pnl_text_box = BoxLayout(orientation='vertical', spacing=2, pos_hint={'center_y': 0.5})
+        pnl_text_box.add_widget(LeftAlignedLabel(text="多维策略净盈亏 (PnL Analytics)", font_size=22, bold=True, color=C_TEXT_PRIMARY))
+        self.pnl_dash_sub = LeftAlignedLabel(text="已实现净利: +0.0000 USDT (扣手续费)", font_size=18, color=C_TEXT_MUTED)
+        pnl_text_box.add_widget(self.pnl_dash_sub)
+        pnl_card.add_widget(pnl_text_box)
+
+        btn_go_pnl = PillButton(text="详情", size_hint=(None, None), size=(86, 42), pos_hint={'center_y': 0.5}, bg_color=C_CARD_HOVER, font_size=18, color=C_TEXT_MUTED, radius=[8])
+        btn_go_pnl.bind(on_press=lambda x: self.switch_tab(3))
+        pnl_card.add_widget(btn_go_pnl)
+        dash_content.add_widget(pnl_card)
+
+        self.view_dashboard.add_widget(dash_content)
 
     def refresh_strategy_details_banner(self):
         m_type = self.active_market_type.split()[0]
@@ -443,45 +560,44 @@ class OKXProQuantStationApp(App):
         stop_act = '自动撤单' if '自动撤销' in self.active_cancel_on_stop else '保留挂单'
 
         banner_text = (
-            f"● 日内实盘: 标的 {self.active_symbol} ({m_type})  |  周期: {self.active_timeframe}  |  "
-            f"引擎: {strat} ({lev})  |  步长: {self.active_grid_pct*100:.2f}%  |  "
-            f"单笔: {self.active_order_usdt:.1f}U  |  止盈: +{self.active_tp_pct*100:.2f}%  |  "
-            f"止损: -{self.active_sl_pct*100:.2f}%  |  停机: {stop_act}"
+            f"● 标的: {self.active_symbol} ({m_type}) | 周期: {self.active_timeframe} | "
+            f"模式: {strat} ({lev}) | 步长: {self.active_grid_pct*100:.2f}% | "
+            f"单笔: {self.active_order_usdt:.1f}U | 止盈: +{self.active_tp_pct*100:.2f}% | 停机: {stop_act}"
         )
         Clock.schedule_once(lambda dt: setattr(self.strategy_details_lbl, 'text', banner_text))
-        Clock.schedule_once(lambda dt: setattr(self.strategy_details_lbl, 'color', C_ACCENT_CYAN))
+        Clock.schedule_once(lambda dt: setattr(self.strategy_details_lbl, 'color', C_ACCENT_BLUE))
 
     def open_unified_strategy_popup(self, instance=None):
         if not self.is_connected:
             self.show_info_popup("提示", "请先在「API凭证」页面连接 OKX！")
             return
 
-        box = BoxLayout(orientation='vertical', padding=[28, 20, 28, 20], spacing=16)
+        box = BoxLayout(orientation='vertical', padding=[24, 20, 24, 20], spacing=16)
         header_text = f"AI 智能诊断最佳推荐: 【{self.current_ai_target_strategy}】"
-        box.add_widget(Label(text=header_text, font_size=30, bold=True, color=C_AMBER, size_hint_y=None, height=54, halign='center'))
+        box.add_widget(Label(text=header_text, font_size=28, bold=True, color=C_AMBER, size_hint_y=None, height=48, halign='center'))
 
-        grid = GridLayout(cols=2, spacing=[24, 14], row_default_height=68, row_force_default=True)
-        grid.add_widget(LeftAlignedLabel(text="市场类型:", font_size=28, bold=True))
-        market_type_spn = Spinner(text=self.active_market_type, values=('现货 (Spot)', '永续合约 (Swap)'), option_cls=ModernSpinnerOption, background_normal='', background_color=C_SURFACE_HOVER, font_size=26)
+        grid = GridLayout(cols=2, spacing=[20, 14], row_default_height=64, row_force_default=True)
+        grid.add_widget(LeftAlignedLabel(text="市场类型:", font_size=26, bold=True, color=C_TEXT_PRIMARY))
+        market_type_spn = Spinner(text=self.active_market_type, values=('现货 (Spot)', '永续合约 (Swap)'), option_cls=ModernSpinnerOption, background_normal='', background_color=C_CARD_HOVER, font_size=24, color=C_TEXT_PRIMARY)
         grid.add_widget(market_type_spn)
 
-        grid.add_widget(LeftAlignedLabel(text="交易币对:", font_size=28, bold=True))
-        symbol_spn = Spinner(text=self.active_symbol, values=('ETH/USDT', 'BTC/USDT', 'SOL/USDT', 'DOGE/USDT', 'OKB/USDT'), option_cls=ModernSpinnerOption, background_normal='', background_color=C_SURFACE_HOVER, font_size=26)
+        grid.add_widget(LeftAlignedLabel(text="交易币对:", font_size=26, bold=True, color=C_TEXT_PRIMARY))
+        symbol_spn = Spinner(text=self.active_symbol, values=('ETH/USDT', 'BTC/USDT', 'SOL/USDT', 'DOGE/USDT', 'OKB/USDT'), option_cls=ModernSpinnerOption, background_normal='', background_color=C_CARD_HOVER, font_size=24, color=C_TEXT_PRIMARY)
         grid.add_widget(symbol_spn)
 
-        grid.add_widget(LeftAlignedLabel(text="K线日内周期:", font_size=28, bold=True))
-        timeframe_spn = Spinner(text=self.active_timeframe, values=('1m', '3m', '5m', '15m'), option_cls=ModernSpinnerOption, background_normal='', background_color=C_SURFACE_HOVER, font_size=26)
+        grid.add_widget(LeftAlignedLabel(text="K线日内周期:", font_size=26, bold=True, color=C_TEXT_PRIMARY))
+        timeframe_spn = Spinner(text=self.active_timeframe, values=('1m', '3m', '5m', '15m'), option_cls=ModernSpinnerOption, background_normal='', background_color=C_CARD_HOVER, font_size=24, color=C_TEXT_PRIMARY)
         grid.add_widget(timeframe_spn)
 
-        grid.add_widget(LeftAlignedLabel(text="策略杠杆:", font_size=28, bold=True))
-        leverage_spn = Spinner(text=self.active_leverage, values=('1x (现货)', '2x', '3x', '5x', '10x'), option_cls=ModernSpinnerOption, background_normal='', background_color=C_SURFACE_HOVER, font_size=26)
+        grid.add_widget(LeftAlignedLabel(text="策略杠杆:", font_size=26, bold=True, color=C_TEXT_PRIMARY))
+        leverage_spn = Spinner(text=self.active_leverage, values=('1x (现货)', '2x', '3x', '5x', '10x'), option_cls=ModernSpinnerOption, background_normal='', background_color=C_CARD_HOVER, font_size=24, color=C_TEXT_PRIMARY)
         grid.add_widget(leverage_spn)
 
         def on_pop_market_change(spn, txt):
             leverage_spn.text = '1x (现货)' if '现货' in txt else '2x'
         market_type_spn.bind(text=on_pop_market_change)
 
-        grid.add_widget(LeftAlignedLabel(text="核心量化策略:", font_size=28, bold=True))
+        grid.add_widget(LeftAlignedLabel(text="核心量化策略:", font_size=26, bold=True, color=C_TEXT_PRIMARY))
         strat_spn = Spinner(
             text=self.active_strategy,
             values=(
@@ -493,35 +609,35 @@ class OKXProQuantStationApp(App):
                 'CTA / 趋势追踪 (Trend)',
                 'TWAP / 冰山算法 (Iceberg)'
             ),
-            option_cls=ModernSpinnerOption, background_normal='', background_color=C_SURFACE_HOVER, font_size=24
+            option_cls=ModernSpinnerOption, background_normal='', background_color=C_CARD_HOVER, font_size=22, color=C_TEXT_PRIMARY
         )
         grid.add_widget(strat_spn)
 
-        grid.add_widget(LeftAlignedLabel(text="网格步长(%) / 单笔U:", font_size=28, bold=True))
+        grid.add_widget(LeftAlignedLabel(text="网格步长(%) / 单笔U:", font_size=26, bold=True, color=C_TEXT_PRIMARY))
         p_box = BoxLayout(spacing=10)
-        grid_pct_in = TextInput(text=str(self.ai_suggested_spread), multiline=False, background_color=C_SURFACE_HOVER, foreground_color=C_TEXT_PRIMARY, font_size=26, padding=[10, 16, 10, 16])
-        order_amt_in = TextInput(text=str(int(self.active_order_usdt)), multiline=False, background_color=C_SURFACE_HOVER, foreground_color=C_TEXT_PRIMARY, font_size=26, padding=[10, 16, 10, 16])
+        grid_pct_in = TextInput(text=str(self.ai_suggested_spread), multiline=False, background_color=C_CARD_HOVER, foreground_color=C_TEXT_PRIMARY, font_size=24, padding=[10, 14, 10, 14])
+        order_amt_in = TextInput(text=str(int(self.active_order_usdt)), multiline=False, background_color=C_CARD_HOVER, foreground_color=C_TEXT_PRIMARY, font_size=24, padding=[10, 14, 10, 14])
         p_box.add_widget(grid_pct_in)
         p_box.add_widget(order_amt_in)
         grid.add_widget(p_box)
 
-        grid.add_widget(LeftAlignedLabel(text="日内止盈(%) / 止损(%):", font_size=28, bold=True))
+        grid.add_widget(LeftAlignedLabel(text="日内止盈(%) / 止损(%):", font_size=26, bold=True, color=C_TEXT_PRIMARY))
         risk_box = BoxLayout(spacing=10)
-        tp_in = TextInput(text=str(self.ai_suggested_tp), multiline=False, background_color=C_SURFACE_HOVER, foreground_color=C_TEXT_PRIMARY, font_size=26, padding=[10, 16, 10, 16])
-        sl_in = TextInput(text=str(self.ai_suggested_sl), multiline=False, background_color=C_SURFACE_HOVER, foreground_color=C_TEXT_PRIMARY, font_size=26, padding=[10, 16, 10, 16])
+        tp_in = TextInput(text=str(self.ai_suggested_tp), multiline=False, background_color=C_CARD_HOVER, foreground_color=C_TEXT_PRIMARY, font_size=24, padding=[10, 14, 10, 14])
+        sl_in = TextInput(text=str(self.ai_suggested_sl), multiline=False, background_color=C_CARD_HOVER, foreground_color=C_TEXT_PRIMARY, font_size=24, padding=[10, 14, 10, 14])
         risk_box.add_widget(tp_in)
         risk_box.add_widget(sl_in)
         grid.add_widget(risk_box)
 
-        grid.add_widget(LeftAlignedLabel(text="停机安全策略:", font_size=28, bold=True))
-        stop_safe_spn = Spinner(text=self.active_cancel_on_stop, values=('停机自动撤销全部挂单', '停机保留盘口挂单'), option_cls=ModernSpinnerOption, background_normal='', background_color=C_SURFACE_HOVER, font_size=26)
+        grid.add_widget(LeftAlignedLabel(text="停机安全策略:", font_size=26, bold=True, color=C_TEXT_PRIMARY))
+        stop_safe_spn = Spinner(text=self.active_cancel_on_stop, values=('停机自动撤销全部挂单', '停机保留盘口挂单'), option_cls=ModernSpinnerOption, background_normal='', background_color=C_CARD_HOVER, font_size=24, color=C_TEXT_PRIMARY)
         grid.add_widget(stop_safe_spn)
 
         box.add_widget(grid)
 
-        btn_box = BoxLayout(size_hint_y=None, height=72, spacing=18)
-        btn_confirm = FlatButton(text="确认采纳并应用策略", bg_color=(0.04, 0.55, 0.32, 1), bold=True, font_size=28, radius=[10])
-        btn_cancel = FlatButton(text="取消", bg_color=C_SURFACE_HOVER, font_size=28, radius=[10], size_hint_x=0.35)
+        btn_box = BoxLayout(size_hint_y=None, height=66, spacing=16)
+        btn_confirm = PillButton(text="确认采纳并应用策略", bg_color=(0.063, 0.655, 0.388, 1), bold=True, font_size=26, radius=[12])
+        btn_cancel = PillButton(text="取消", bg_color=C_CARD_HOVER, font_size=26, radius=[12], size_hint_x=0.35, color=C_TEXT_MUTED)
         btn_box.add_widget(btn_confirm)
         btn_box.add_widget(btn_cancel)
         box.add_widget(btn_box)
@@ -559,7 +675,7 @@ class OKXProQuantStationApp(App):
     def execute_strategy_change(self, new_strategy, cancel_existing_orders=True):
         raw_symbol = self.active_symbol.strip().upper()
         display_name = new_strategy.split()[0] if '【' not in new_strategy else 'AI自适应'
-        Clock.schedule_once(lambda dt: setattr(self.symbol_mode_lbl, 'text', f"{raw_symbol} [{display_name}]"))
+        Clock.schedule_once(lambda dt: setattr(self.symbol_mode_lbl, 'text', f"{raw_symbol} [{display_name}]  |  {self.active_timeframe}"))
 
         if cancel_existing_orders and self.exchange and self.current_symbol:
             def do_clean():
@@ -578,19 +694,20 @@ class OKXProQuantStationApp(App):
             threading.Thread(target=do_clean, daemon=True).start()
 
     def init_orders_tab(self):
-        self.view_orders = ModernCard(orientation='vertical', padding=[24, 18, 24, 18], spacing=10)
-        head = BoxLayout(size_hint_y=None, height=64, spacing=14)
-        head.add_widget(LeftAlignedLabel(text="盘口活跃挂单监控", font_size=34, bold=True, color=C_TEXT_PRIMARY))
-        btn_refresh = FlatButton(text="立即刷新", size_hint_x=0.22, bg_color=C_SURFACE_HOVER, font_size=26, bold=True, radius=[8])
+        """【活跃挂单】纯白卡片式列表"""
+        self.view_orders = ClashCard(orientation='vertical', padding=[24, 18, 24, 18], spacing=12)
+        head = BoxLayout(size_hint_y=None, height=58, spacing=14)
+        head.add_widget(LeftAlignedLabel(text="盘口活跃挂单监控", font_size=30, bold=True, color=C_TEXT_PRIMARY))
+        btn_refresh = PillButton(text="立即刷新", size_hint_x=0.22, bg_color=(0.92, 0.95, 0.99, 1), font_size=24, bold=True, radius=[10], color=C_ACCENT_BLUE)
         btn_refresh.bind(on_press=self.manual_refresh_orders)
         head.add_widget(btn_refresh)
         self.view_orders.add_widget(head)
 
-        t_head = BoxLayout(size_hint_y=None, height=52, spacing=8)
-        t_head.add_widget(LeftAlignedLabel(text="方向 / 订单编号", size_hint_x=0.28, font_size=24, color=C_TEXT_MUTED, bold=True))
-        t_head.add_widget(LeftAlignedLabel(text="委托价格 (USDT)", size_hint_x=0.24, font_size=24, color=C_TEXT_MUTED, bold=True))
-        t_head.add_widget(LeftAlignedLabel(text="委托数量", size_hint_x=0.24, font_size=24, color=C_TEXT_MUTED, bold=True))
-        t_head.add_widget(LeftAlignedLabel(text="状态 / 提交时间", size_hint_x=0.24, font_size=24, color=C_TEXT_MUTED, bold=True))
+        t_head = BoxLayout(size_hint_y=None, height=44, spacing=8)
+        t_head.add_widget(LeftAlignedLabel(text="方向 / 订单编号", size_hint_x=0.28, font_size=22, color=C_TEXT_MUTED, bold=True))
+        t_head.add_widget(LeftAlignedLabel(text="委托价格 (USDT)", size_hint_x=0.24, font_size=22, color=C_TEXT_MUTED, bold=True))
+        t_head.add_widget(LeftAlignedLabel(text="委托数量", size_hint_x=0.24, font_size=22, color=C_TEXT_MUTED, bold=True))
+        t_head.add_widget(LeftAlignedLabel(text="状态 / 提交时间", size_hint_x=0.24, font_size=22, color=C_TEXT_MUTED, bold=True))
         self.view_orders.add_widget(t_head)
 
         scroll = ScrollView(size_hint=(1, 1))
@@ -615,12 +732,12 @@ class OKXProQuantStationApp(App):
         self.orders_list_layout.clear_widgets()
         if not open_orders:
             empty_box = BoxLayout(size_hint_y=None, height=140)
-            empty_box.add_widget(Label(text="盘口暂无处于活动状态的订单", font_size=28, color=C_TEXT_MUTED))
+            empty_box.add_widget(Label(text="盘口暂无处于活动状态的订单", font_size=26, color=C_TEXT_MUTED))
             self.orders_list_layout.add_widget(empty_box)
             return
 
         for o in open_orders:
-            row = ModernCard(bg_color=C_SURFACE_HOVER, size_hint_y=None, height=68, padding=[16, 8, 16, 8], spacing=8, radius=[8])
+            row = ClashCard(bg_color=C_CARD_HOVER, size_hint_y=None, height=64, padding=[16, 8, 16, 8], spacing=8, radius=[10])
             side = o.get('side', 'buy').upper()
             is_buy = side == 'BUY'
             side_color = C_GREEN if is_buy else C_RED
@@ -629,36 +746,36 @@ class OKXProQuantStationApp(App):
             q_val = f"{float(o.get('amount', 0)):.4f}"
             t_str = time.strftime('%H:%M:%S', time.localtime(o.get('timestamp', time.time()*1000)/1000))
 
-            row.add_widget(LeftAlignedLabel(text=side_tag, size_hint_x=0.28, font_size=26, bold=True, color=side_color))
-            row.add_widget(LeftAlignedLabel(text=p_val, size_hint_x=0.24, font_size=28, bold=True, color=C_TEXT_PRIMARY))
-            row.add_widget(LeftAlignedLabel(text=q_val, size_hint_x=0.24, font_size=28, color=C_TEXT_PRIMARY))
-            row.add_widget(LeftAlignedLabel(text=f"挂单中 ({t_str})", size_hint_x=0.24, font_size=24, color=C_TEXT_MUTED))
+            row.add_widget(LeftAlignedLabel(text=side_tag, size_hint_x=0.28, font_size=24, bold=True, color=side_color))
+            row.add_widget(LeftAlignedLabel(text=p_val, size_hint_x=0.24, font_size=26, bold=True, color=C_TEXT_PRIMARY))
+            row.add_widget(LeftAlignedLabel(text=q_val, size_hint_x=0.24, font_size=26, color=C_TEXT_PRIMARY))
+            row.add_widget(LeftAlignedLabel(text=f"挂单中 ({t_str})", size_hint_x=0.24, font_size=22, color=C_TEXT_MUTED))
             self.orders_list_layout.add_widget(row)
 
     def init_api_tab(self):
-        self.view_api = ModernCard(orientation='vertical', padding=[40, 30, 40, 30], spacing=20)
-        self.view_api.add_widget(LeftAlignedLabel(text="OKX 交易所安全连通中心", font_size=38, bold=True, color=C_TEXT_PRIMARY, size_hint_y=None, height=54))
-        self.view_api.add_widget(LeftAlignedLabel(text="使用原生网络环境连通（支持科学上网），凭证已采用 Fernet 对称加密安全存储。", font_size=24, color=C_TEXT_MUTED, size_hint_y=None, height=36))
+        """【API凭证】大圆角现代卡片表单"""
+        self.view_api = ClashCard(orientation='vertical', padding=[36, 26, 36, 26], spacing=18)
+        self.view_api.add_widget(LeftAlignedLabel(text="OKX 交易所安全连通中心", font_size=32, bold=True, color=C_TEXT_PRIMARY, size_hint_y=None, height=48))
+        self.view_api.add_widget(LeftAlignedLabel(text="使用原生网络环境连通（支持科学上网），凭证已采用对称加密安全存储在沙盒中。", font_size=22, color=C_TEXT_MUTED, size_hint_y=None, height=32))
 
-        grid = GridLayout(cols=2, spacing=[24, 16], row_default_height=76, row_force_default=True, size_hint_y=None, height=260)
-        grid.add_widget(LeftAlignedLabel(text="OKX API Key:", font_size=28, bold=True, color=C_TEXT_PRIMARY))
-        self.api_key_input = TextInput(multiline=False, password=True, background_color=C_SURFACE_HOVER, foreground_color=C_TEXT_PRIMARY, font_size=28, padding=[14, 18, 14, 18])
+        grid = GridLayout(cols=2, spacing=[24, 16], row_default_height=70, row_force_default=True, size_hint_y=None, height=240)
+        grid.add_widget(LeftAlignedLabel(text="OKX API Key:", font_size=26, bold=True, color=C_TEXT_PRIMARY))
+        self.api_key_input = TextInput(multiline=False, password=True, background_color=C_CARD_HOVER, foreground_color=C_TEXT_PRIMARY, font_size=26, padding=[14, 16, 14, 16])
         grid.add_widget(self.api_key_input)
 
-        grid.add_widget(LeftAlignedLabel(text="OKX Secret Key:", font_size=28, bold=True, color=C_TEXT_PRIMARY))
-        self.secret_input = TextInput(multiline=False, password=True, background_color=C_SURFACE_HOVER, foreground_color=C_TEXT_PRIMARY, font_size=28, padding=[14, 18, 14, 18])
+        grid.add_widget(LeftAlignedLabel(text="OKX Secret Key:", font_size=26, bold=True, color=C_TEXT_PRIMARY))
+        self.secret_input = TextInput(multiline=False, password=True, background_color=C_CARD_HOVER, foreground_color=C_TEXT_PRIMARY, font_size=26, padding=[14, 16, 14, 16])
         grid.add_widget(self.secret_input)
 
-        grid.add_widget(LeftAlignedLabel(text="OKX Passphrase:", font_size=28, bold=True, color=C_TEXT_PRIMARY))
-        self.pass_input = TextInput(multiline=False, password=True, background_color=C_SURFACE_HOVER, foreground_color=C_TEXT_PRIMARY, font_size=28, padding=[14, 18, 14, 18])
+        grid.add_widget(LeftAlignedLabel(text="OKX Passphrase:", font_size=26, bold=True, color=C_TEXT_PRIMARY))
+        self.pass_input = TextInput(multiline=False, password=True, background_color=C_CARD_HOVER, foreground_color=C_TEXT_PRIMARY, font_size=26, padding=[14, 16, 14, 16])
         grid.add_widget(self.pass_input)
-
         self.view_api.add_widget(grid)
 
-        btn_row = BoxLayout(size_hint_y=None, height=76, spacing=20)
-        self.btn_connect_exchange = FlatButton(text="接入 OKX 交易所", bg_color=(0.04, 0.55, 0.32, 1), font_size=30, bold=True, radius=[10])
+        btn_row = BoxLayout(size_hint_y=None, height=68, spacing=18)
+        self.btn_connect_exchange = PillButton(text="接入 OKX 交易所", bg_color=(0.063, 0.655, 0.388, 1), font_size=28, bold=True, radius=[14])
         self.btn_connect_exchange.bind(on_press=self.action_connect_exchange)
-        self.btn_clear_cred = FlatButton(text="清空本地凭据", bg_color=(0.60, 0.18, 0.22, 1), font_size=30, bold=True, size_hint_x=0.35, radius=[10])
+        self.btn_clear_cred = PillButton(text="清空本地凭据", bg_color=(0.89, 0.22, 0.275, 1), font_size=28, bold=True, size_hint_x=0.35, radius=[14])
         self.btn_clear_cred.bind(on_press=self.clear_saved_credentials)
 
         btn_row.add_widget(self.btn_connect_exchange)
@@ -699,11 +816,14 @@ class OKXProQuantStationApp(App):
                 self.is_connected = True
                 CredentialManager.save(key, secret, pwd)
 
-                Clock.schedule_once(lambda dt: self.btn_connect_exchange.set_bg((0.04, 0.55, 0.32, 1)))
+                Clock.schedule_once(lambda dt: self.btn_connect_exchange.set_bg((0.063, 0.655, 0.388, 1)))
                 Clock.schedule_once(lambda dt: setattr(self.btn_connect_exchange, 'text', "已成功接入 OKX"))
-                Clock.schedule_once(lambda dt, b=usdt_free: setattr(self.balance_lbl, 'text', f"{b:.2f} USDT (0 笔)"))
+                Clock.schedule_once(lambda dt, b=usdt_free: setattr(self.balance_lbl, 'text', f"当前盘口: 0 笔挂单  |  可用: {b:.2f} USDT"))
+                Clock.schedule_once(lambda dt, b=usdt_free: setattr(self.hero_sub_lbl, 'text', f"ETH: 2,403.90  |  可用: {b:.2f} USDT"))
                 Clock.schedule_once(lambda dt: setattr(self.status_lbl, 'text', "在线待命"))
-                Clock.schedule_once(lambda dt: setattr(self.status_lbl, 'color', C_GREEN))
+                Clock.schedule_once(lambda dt: self.hero_card.set_bg(C_HERO_STANDBY))
+                Clock.schedule_once(lambda dt: setattr(self.api_status_sub, 'text', "已成功接入 OKX (API 运行正常)"))
+                Clock.schedule_once(lambda dt: setattr(self.api_status_sub, 'color', C_GREEN))
                 
                 self.append_log(f"鉴权成功：OKX 账户接入成功！账户可用 USDT: {usdt_free:.2f}")
                 threading.Thread(target=self.market_and_ai_daemon_thread, daemon=True).start()
@@ -712,7 +832,7 @@ class OKXProQuantStationApp(App):
             except Exception as e:
                 err_msg = str(e)
                 self.append_log(f"连接失败: {err_msg[:50]}")
-                Clock.schedule_once(lambda dt: self.btn_connect_exchange.set_bg((0.04, 0.55, 0.32, 1)))
+                Clock.schedule_once(lambda dt: self.btn_connect_exchange.set_bg((0.063, 0.655, 0.388, 1)))
                 Clock.schedule_once(lambda dt: setattr(self.btn_connect_exchange, 'text', "接入 OKX 交易所"))
                 Clock.schedule_once(lambda dt, msg=err_msg: self.show_info_popup("连接失败", f"无法连通 OKX，原因:\n{msg[:120]}"))
 
@@ -721,9 +841,9 @@ class OKXProQuantStationApp(App):
     def show_info_popup(self, title, message):
         box = BoxLayout(orientation='vertical', padding=[24, 20, 24, 20], spacing=16)
         box.add_widget(Label(text=message, font_size=26, color=C_TEXT_PRIMARY, halign='center'))
-        btn = FlatButton(text="确定", size_hint_y=None, height=60, bg_color=C_SURFACE_HOVER, font_size=26, radius=[8])
+        btn = PillButton(text="确定", size_hint_y=None, height=54, bg_color=(0.92, 0.95, 0.99, 1), font_size=24, radius=[10], color=C_ACCENT_BLUE)
         box.add_widget(btn)
-        pop = Popup(title=title, content=box, size_hint=(0.65, 0.45))
+        pop = Popup(title=title, content=box, size_hint=(0.70, 0.45))
         btn.bind(on_press=pop.dismiss)
         pop.open()
 
@@ -743,35 +863,38 @@ class OKXProQuantStationApp(App):
         self.pass_input.text = ""
         self.is_connected = False
         CredentialManager.clear()
+        self.api_status_sub.text = "未接入 (点击前往「API凭证」填入并连接)"
+        self.api_status_sub.color = C_TEXT_MUTED
         self.append_log("已彻底清除本地保存的 API 凭据！")
 
     def init_pnl_tab(self):
-        self.view_pnl = ModernCard(orientation='vertical', padding=[32, 24, 32, 24], spacing=16)
-        self.view_pnl.add_widget(LeftAlignedLabel(text="多维策略净盈亏看板 (已扣除交易手续费)", font_size=34, bold=True, color=C_TEXT_PRIMARY, size_hint_y=None, height=52))
+        """【盈亏分析】纯白卡片数据网格"""
+        self.view_pnl = ClashCard(orientation='vertical', padding=[30, 22, 30, 22], spacing=14)
+        self.view_pnl.add_widget(LeftAlignedLabel(text="多维策略净盈亏看板 (已扣除交易手续费)", font_size=30, bold=True, color=C_TEXT_PRIMARY, size_hint_y=None, height=48))
 
-        grid = GridLayout(cols=2, spacing=[30, 16], row_default_height=78, row_force_default=True)
-        grid.add_widget(LeftAlignedLabel(text="累计已实现净利润:", font_size=28, bold=True, color=C_TEXT_MUTED))
-        self.pnl_total_lbl = LeftAlignedLabel(text="+0.0000 USDT", font_size=42, color=C_GREEN, bold=True)
+        grid = GridLayout(cols=2, spacing=[24, 14], row_default_height=70, row_force_default=True)
+        grid.add_widget(LeftAlignedLabel(text="累计已实现净利润:", font_size=26, bold=True, color=C_TEXT_MUTED))
+        self.pnl_total_lbl = LeftAlignedLabel(text="+0.0000 USDT", font_size=38, color=C_GREEN, bold=True)
         grid.add_widget(self.pnl_total_lbl)
 
-        grid.add_widget(LeftAlignedLabel(text="预估今日收益 (24H):", font_size=28, bold=True, color=C_TEXT_MUTED))
-        self.pnl_day_lbl = LeftAlignedLabel(text="+0.00 USDT", font_size=36, color=C_TEXT_PRIMARY, bold=True)
+        grid.add_widget(LeftAlignedLabel(text="预估今日收益 (24H):", font_size=26, bold=True, color=C_TEXT_MUTED))
+        self.pnl_day_lbl = LeftAlignedLabel(text="+0.00 USDT", font_size=32, color=C_TEXT_PRIMARY, bold=True)
         grid.add_widget(self.pnl_day_lbl)
 
-        grid.add_widget(LeftAlignedLabel(text="预估本周收益 (7D):", font_size=28, bold=True, color=C_TEXT_MUTED))
-        self.pnl_week_lbl = LeftAlignedLabel(text="+0.00 USDT", font_size=36, color=C_TEXT_PRIMARY, bold=True)
+        grid.add_widget(LeftAlignedLabel(text="预估本周收益 (7D):", font_size=26, bold=True, color=C_TEXT_MUTED))
+        self.pnl_week_lbl = LeftAlignedLabel(text="+0.00 USDT", font_size=32, color=C_TEXT_PRIMARY, bold=True)
         grid.add_widget(self.pnl_week_lbl)
 
-        grid.add_widget(LeftAlignedLabel(text="预估本月收益 (30D):", font_size=28, bold=True, color=C_TEXT_MUTED))
-        self.pnl_month_lbl = LeftAlignedLabel(text="+0.00 USDT", font_size=36, color=C_TEXT_PRIMARY, bold=True)
+        grid.add_widget(LeftAlignedLabel(text="预估本月收益 (30D):", font_size=26, bold=True, color=C_TEXT_MUTED))
+        self.pnl_month_lbl = LeftAlignedLabel(text="+0.00 USDT", font_size=32, color=C_TEXT_PRIMARY, bold=True)
         grid.add_widget(self.pnl_month_lbl)
 
-        grid.add_widget(LeftAlignedLabel(text="平滑年化折算 (APY):", font_size=28, bold=True, color=C_TEXT_MUTED))
-        self.pnl_apy_lbl = LeftAlignedLabel(text="样本积累中...", font_size=38, color=C_AMBER, bold=True)
+        grid.add_widget(LeftAlignedLabel(text="平滑年化折算 (APY):", font_size=26, bold=True, color=C_TEXT_MUTED))
+        self.pnl_apy_lbl = LeftAlignedLabel(text="样本积累中...", font_size=32, color=C_AMBER, bold=True)
         grid.add_widget(self.pnl_apy_lbl)
 
-        grid.add_widget(LeftAlignedLabel(text="有效套利结算轮次:", font_size=28, bold=True, color=C_TEXT_MUTED))
-        self.pnl_trades_lbl = LeftAlignedLabel(text="0 次", font_size=36, color=C_ACCENT_CYAN, bold=True)
+        grid.add_widget(LeftAlignedLabel(text="有效套利结算轮次:", font_size=26, bold=True, color=C_TEXT_MUTED))
+        self.pnl_trades_lbl = LeftAlignedLabel(text="0 次", font_size=32, color=C_ACCENT_BLUE, bold=True)
         grid.add_widget(self.pnl_trades_lbl)
 
         self.view_pnl.add_widget(grid)
@@ -806,15 +929,21 @@ class OKXProQuantStationApp(App):
         Clock.schedule_once(lambda dt: setattr(self.pnl_month_lbl, 'text', month_str))
         Clock.schedule_once(lambda dt: setattr(self.pnl_apy_lbl, 'text', apy_str))
         Clock.schedule_once(lambda dt: setattr(self.pnl_trades_lbl, 'text', f"{self.total_arbitrage_count} 次"))
+        Clock.schedule_once(lambda dt: setattr(self.pnl_dash_sub, 'text', f"已实现净利: {self.total_profit_usdt:+.4f} USDT ({self.total_arbitrage_count} 轮套利)"))
 
     def init_logs_tab(self):
-        self.view_logs = ModernCard(orientation='vertical', padding=[20, 16, 20, 16], bg_color=(0.02, 0.03, 0.04, 1))
+        """【系统日志】纯白外框 + 暗黑极客终端窗口"""
+        self.view_logs = ClashCard(orientation='vertical', padding=[16, 14, 16, 14], spacing=10)
+        self.view_logs.add_widget(LeftAlignedLabel(text="系统运行日志控制台", font_size=28, bold=True, color=C_TEXT_PRIMARY, size_hint_y=None, height=40))
+        
+        terminal_box = ClashCard(orientation='vertical', padding=[16, 12, 16, 12], bg_color=(0.08, 0.10, 0.14, 1), radius=[10], has_border=False)
         scroll = ScrollView(size_hint=(1, 1), do_scroll_x=False, do_scroll_y=True)
-        self.log_lbl = Label(text="[SYSTEM] 日内量化操盘工作站已就绪。所有策略算法均已载入。", font_size=26, color=(0.4, 0.8, 0.5, 1), size_hint=(1, None), halign='left', valign='top')
+        self.log_lbl = Label(text="[SYSTEM] 日内量化操盘工作站已就绪。所有策略算法均已载入。", font_size=22, color=(0.4, 0.85, 0.55, 1), size_hint=(1, None), halign='left', valign='top')
         self.log_lbl.bind(width=lambda instance, value: setattr(instance, 'text_size', (value, None)))
         self.log_lbl.bind(texture_size=lambda instance, value: setattr(instance, 'height', value[1]))
         scroll.add_widget(self.log_lbl)
-        self.view_logs.add_widget(scroll)
+        terminal_box.add_widget(scroll)
+        self.view_logs.add_widget(terminal_box)
 
     def append_log(self, text):
         timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
@@ -953,7 +1082,7 @@ class OKXProQuantStationApp(App):
                 return
 
             if not self.strategy_adopted:
-                self.show_info_popup("阻断提示", "请先在操盘终端点击「配置策略参数」应用后再启动！")
+                self.show_info_popup("阻断提示", "请先在操盘终端点击「配置参数」应用后再启动！")
                 return
 
             self.running = True
@@ -961,14 +1090,14 @@ class OKXProQuantStationApp(App):
             self.toggle_btn.text = "紧急停止日内策略"
             self.toggle_btn.set_bg(C_RED)
             self.status_lbl.text = "策略执行中"
-            self.status_lbl.color = C_GREEN
+            self.hero_card.set_bg(C_HERO_RUNNING)
             threading.Thread(target=self.bot_execution_loop, daemon=True).start()
         else:
             self.running = False
             self.toggle_btn.text = "启动日内高胜率策略"
-            self.toggle_btn.set_bg((0.04, 0.55, 0.32, 1))
+            self.toggle_btn.set_bg((0.063, 0.655, 0.388, 1))
             self.status_lbl.text = "策略已终止"
-            self.status_lbl.color = C_AMBER
+            self.hero_card.set_bg(C_HERO_ALERT)
             self.append_log("用户手动暂停了策略。")
 
     def calc_order_qty(self, symbol, order_usdt, price):
@@ -982,7 +1111,10 @@ class OKXProQuantStationApp(App):
             return float(contracts)
         else:
             raw_qty = order_usdt / price
-            safe_qty = float(self.exchange.amount_to_precision(symbol, raw_qty))
+            try:
+                safe_qty = float(self.exchange.amount_to_precision(symbol, raw_qty))
+            except Exception:
+                safe_qty = round(raw_qty, 4)
             min_amt = float(market.get('limits', {}).get('amount', {}).get('min', 0.0001))
             return max(safe_qty, min_amt)
 
@@ -1003,7 +1135,10 @@ class OKXProQuantStationApp(App):
                 ticker = self.exchange.fetch_ticker(symbol)
                 curr_price = float(ticker['last'])
                 if base_free * curr_price >= 2.0:
-                    safe_sell_qty = float(self.exchange.amount_to_precision(symbol, base_free * 0.999))
+                    try:
+                        safe_sell_qty = float(self.exchange.amount_to_precision(symbol, base_free * 0.999))
+                    except Exception:
+                        safe_sell_qty = round(base_free * 0.999, 4)
                     self.exchange.create_market_sell_order(symbol, safe_sell_qty)
                     self.append_log(f"【现货清仓完成】市价卖出 {safe_sell_qty} {base_currency}")
             else:
@@ -1063,7 +1198,8 @@ class OKXProQuantStationApp(App):
                     base_free = float(balance['free'].get(base_currency, 0.0))
 
                     open_orders = self.exchange.fetch_open_orders(symbol)
-                    Clock.schedule_once(lambda dt, b=usdt_free, c=len(open_orders): setattr(self.balance_lbl, 'text', f"{b:.2f} USDT ({c} 笔)"))
+                    Clock.schedule_once(lambda dt, b=usdt_free, c=len(open_orders): setattr(self.balance_lbl, 'text', f"当前盘口: {c} 笔挂单  |  可用: {b:.2f} USDT"))
+                    Clock.schedule_once(lambda dt, p=current_price, b=usdt_free: setattr(self.hero_sub_lbl, 'text', f"ETH: {p:,.2f}  |  可用: {b:.2f} USDT"))
                     Clock.schedule_once(lambda dt, ods=open_orders: self.refresh_orders_view(ods))
                     open_order_ids = {o['id'] for o in open_orders}
 
@@ -1092,7 +1228,10 @@ class OKXProQuantStationApp(App):
 
                                 if "现货网格" in active_strat:
                                     if side == 'buy':
-                                        t_sell_price = float(self.exchange.price_to_precision(symbol, avg_price * (1 + grid_pct)))
+                                        try:
+                                            t_sell_price = float(self.exchange.price_to_precision(symbol, avg_price * (1 + grid_pct)))
+                                        except Exception:
+                                            t_sell_price = round(avg_price * (1 + grid_pct), 2)
                                         sell_qty = self.calc_order_qty(symbol, order_usdt, t_sell_price)
                                         try:
                                             s_ord = self.exchange.create_limit_sell_order(symbol, sell_qty, t_sell_price)
@@ -1106,7 +1245,10 @@ class OKXProQuantStationApp(App):
                                         self.update_pnl_analytics(net_p)
                                         self.append_log(f"【现货网格】套利落袋: 净利 +{net_p:.4f}U (手续费 {fee:.4f}U)")
 
-                                        t_buy_price = float(self.exchange.price_to_precision(symbol, avg_price * (1 - grid_pct)))
+                                        try:
+                                            t_buy_price = float(self.exchange.price_to_precision(symbol, avg_price * (1 - grid_pct)))
+                                        except Exception:
+                                            t_buy_price = round(avg_price * (1 - grid_pct), 2)
                                         buy_qty = self.calc_order_qty(symbol, order_usdt, t_buy_price)
                                         try:
                                             b_ord = self.exchange.create_limit_buy_order(symbol, buy_qty, t_buy_price)
@@ -1119,7 +1261,10 @@ class OKXProQuantStationApp(App):
                                     role = oinfo.get('role', 'open_long' if side == 'buy' else 'open_short')
                                     if side == 'buy':
                                         if role == 'open_long':
-                                            t_sell_p = float(self.exchange.price_to_precision(symbol, avg_price * (1 + grid_pct)))
+                                            try:
+                                                t_sell_p = float(self.exchange.price_to_precision(symbol, avg_price * (1 + grid_pct)))
+                                            except Exception:
+                                                t_sell_p = round(avg_price * (1 + grid_pct), 2)
                                             sell_qty = self.calc_order_qty(symbol, order_usdt, t_sell_p)
                                             try:
                                                 s_ord = self.exchange.create_limit_sell_order(symbol, sell_qty, t_sell_p)
@@ -1134,7 +1279,10 @@ class OKXProQuantStationApp(App):
                                             net_p, fee = self.calc_net_profit(symbol, avg_price, entry_p, filled_qty)
                                             self.update_pnl_analytics(net_p)
                                             self.append_log(f"【合约中性网格】空单止盈落袋！净利: +{net_p:.4f}U (手续费 {fee:.4f}U)")
-                                            t_ask_p = float(self.exchange.price_to_precision(symbol, avg_price * (1 + grid_pct)))
+                                            try:
+                                                t_ask_p = float(self.exchange.price_to_precision(symbol, avg_price * (1 + grid_pct)))
+                                            except Exception:
+                                                t_ask_p = round(avg_price * (1 + grid_pct), 2)
                                             ask_qty = self.calc_order_qty(symbol, order_usdt, t_ask_p)
                                             try:
                                                 s_ord = self.exchange.create_limit_sell_order(symbol, ask_qty, t_ask_p)
@@ -1147,7 +1295,10 @@ class OKXProQuantStationApp(App):
 
                                     elif side == 'sell':
                                         if role == 'open_short':
-                                            t_buy_p = float(self.exchange.price_to_precision(symbol, avg_price * (1 - grid_pct)))
+                                            try:
+                                                t_buy_p = float(self.exchange.price_to_precision(symbol, avg_price * (1 - grid_pct)))
+                                            except Exception:
+                                                t_buy_p = round(avg_price * (1 - grid_pct), 2)
                                             buy_qty = self.calc_order_qty(symbol, order_usdt, t_buy_p)
                                             try:
                                                 b_ord = self.exchange.create_limit_buy_order(symbol, buy_qty, t_buy_p)
@@ -1162,7 +1313,10 @@ class OKXProQuantStationApp(App):
                                             net_p, fee = self.calc_net_profit(symbol, entry_p, avg_price, filled_qty)
                                             self.update_pnl_analytics(net_p)
                                             self.append_log(f"【合约中性网格】多单止盈落袋！净利: +{net_p:.4f}U (手续费 {fee:.4f}U)")
-                                            t_bid_p = float(self.exchange.price_to_precision(symbol, avg_price * (1 - grid_pct)))
+                                            try:
+                                                t_bid_p = float(self.exchange.price_to_precision(symbol, avg_price * (1 - grid_pct)))
+                                            except Exception:
+                                                t_bid_p = round(avg_price * (1 - grid_pct), 2)
                                             bid_qty = self.calc_order_qty(symbol, order_usdt, t_bid_p)
                                             try:
                                                 b_ord = self.exchange.create_limit_buy_order(symbol, bid_qty, t_bid_p)
@@ -1181,7 +1335,10 @@ class OKXProQuantStationApp(App):
 
                     if "现货网格" in active_strat and len(open_orders) == 0 and len(self.active_strategy_orders) == 0:
                         if usdt_free >= order_usdt:
-                            buy_p = float(self.exchange.price_to_precision(symbol, current_price * (1 - grid_pct)))
+                            try:
+                                buy_p = float(self.exchange.price_to_precision(symbol, current_price * (1 - grid_pct)))
+                            except Exception:
+                                buy_p = round(current_price * (1 - grid_pct), 2)
                             buy_q = self.calc_order_qty(symbol, order_usdt, buy_p)
                             self.append_log(f"【现货网格】布设首期底仓买单: {buy_p} | 量 {buy_q}")
                             b_ord = self.exchange.create_limit_buy_order(symbol, buy_q, buy_p)
@@ -1189,8 +1346,12 @@ class OKXProQuantStationApp(App):
                             initial_entry_price = current_price
 
                     elif "中性网格" in active_strat and len(open_orders) == 0 and len(self.active_strategy_orders) == 0:
-                        bid_p = float(self.exchange.price_to_precision(symbol, current_price * (1 - grid_pct)))
-                        ask_p = float(self.exchange.price_to_precision(symbol, current_price * (1 + grid_pct)))
+                        try:
+                            bid_p = float(self.exchange.price_to_precision(symbol, current_price * (1 - grid_pct)))
+                            ask_p = float(self.exchange.price_to_precision(symbol, current_price * (1 + grid_pct)))
+                        except Exception:
+                            bid_p = round(current_price * (1 - grid_pct), 2)
+                            ask_p = round(current_price * (1 + grid_pct), 2)
                         o_qty = self.calc_order_qty(symbol, order_usdt, current_price)
                         
                         b_ord = self.exchange.create_limit_buy_order(symbol, o_qty, bid_p)
@@ -1285,7 +1446,10 @@ class OKXProQuantStationApp(App):
                             slice_usdt = order_usdt / 5.0
                             if usdt_free >= slice_usdt:
                                 slice_qty = self.calc_order_qty(symbol, slice_usdt, current_price)
-                                best_bid = float(self.exchange.price_to_precision(symbol, current_price * 0.9995))
+                                try:
+                                    best_bid = float(self.exchange.price_to_precision(symbol, current_price * 0.9995))
+                                except Exception:
+                                    best_bid = round(current_price * 0.9995, 2)
                                 self.append_log(f"【TWAP/冰山】隐蔽挂出第 {twap_slices_executed+1}/5 笔微单: {slice_qty} @ {best_bid}")
                                 self.exchange.create_limit_buy_order(symbol, slice_qty, best_bid)
                                 twap_slices_executed += 1
@@ -1330,10 +1494,10 @@ class OKXProQuantStationApp(App):
                 except Exception as cancel_err:
                     self.append_log(f"撤单失败: {str(cancel_err)[:30]}")
 
-            Clock.schedule_once(lambda dt: self.toggle_btn.set_bg((0.04, 0.55, 0.32, 1)))
+            Clock.schedule_once(lambda dt: self.toggle_btn.set_bg((0.063, 0.655, 0.388, 1)))
             Clock.schedule_once(lambda dt: setattr(self.toggle_btn, 'text', "启动日内高胜率策略"))
             Clock.schedule_once(lambda dt: setattr(self.status_lbl, 'text', "已停机就绪"))
-            Clock.schedule_once(lambda dt: setattr(self.status_lbl, 'color', C_AMBER))
+            Clock.schedule_once(lambda dt: self.hero_card.set_bg(C_HERO_STANDBY))
 
 
 if __name__ == '__main__':
@@ -1347,23 +1511,3 @@ if __name__ == '__main__':
                 f.write(err_msg)
         except Exception:
             pass
-
-        # 启动轻量应急界面在手机屏幕上显示错误
-        from kivy.app import App
-        from kivy.uix.scrollview import ScrollView
-        from kivy.uix.label import Label
-
-        class CrashDisplayApp(App):
-            def build(self):
-                scroll = ScrollView()
-                lbl = Label(
-                    text=f"[启动崩溃原因]\n\n{err_msg}",
-                    size_hint_y=None,
-                    text_size=(None, None),
-                    color=(1, 0.2, 0.2, 1)
-                )
-                lbl.bind(texture_size=lambda inst, val: setattr(lbl, 'size', val))
-                scroll.add_widget(lbl)
-                return scroll
-
-        CrashDisplayApp().run()
