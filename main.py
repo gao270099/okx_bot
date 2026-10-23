@@ -1152,4 +1152,139 @@ class OKXProQuantStationApp(App):
                         initial_entry_price = current_price
                         self.append_log(f"【合约中性网格】双向盘口部署完成: 买单 {bid_p} | 卖单 {ask_p} | 数量 {o_qty}")
 
-                    elif "马丁" in active_strat
+                    elif "马丁" in active_strat or "DCA" in active_strat:
+                        if len(dca_entry_prices) == 0:
+                            if usdt_free >= order_usdt:
+                                o_qty = self.calc_order_qty(symbol, order_usdt, current_price)
+                                self.append_log(f"【马丁/DCA】启动第一期建仓: 买入 {o_qty} @ {current_price}")
+                                self.exchange.create_market_buy_order(symbol, o_qty)
+                                dca_entry_prices.append(current_price)
+                                initial_entry_price = current_price
+                        else:
+                            last_p = dca_entry_prices[-1]
+                            avg_cost = sum(dca_entry_prices) / len(dca_entry_prices)
+                            if current_price >= avg_cost * (1 + tp_pct):
+                                self.append_log(f"【马丁/DCA】持仓均价回抽达到目标 (+{tp_pct*100}%)，全部平仓落袋！")
+                                self.execute_market_close(symbol, is_spot, base_currency)
+                                total_vol = len(dca_entry_prices) * (order_usdt / avg_cost)
+                                net_p, fee = self.calc_net_profit(symbol, avg_cost, current_price, total_vol)
+                                self.update_pnl_analytics(net_p)
+                                dca_entry_prices.clear()
+                                initial_entry_price = None
+                            elif current_price <= last_p * (1 - grid_pct) and len(dca_entry_prices) < self.max_dca_rounds:
+                                mult = 1.0 + (len(dca_entry_prices) * 0.2)
+                                step_usdt = order_usdt * mult
+                                if usdt_free >= step_usdt:
+                                    step_qty = self.calc_order_qty(symbol, step_usdt, current_price)
+                                    self.append_log(f"【马丁/DCA】触发第 {len(dca_entry_prices)+1} 阶梯加倍抄底: 量 {step_qty} ({mult:.1f}x)")
+                                    self.exchange.create_market_buy_order(symbol, step_qty)
+                                    dca_entry_prices.append(current_price)
+
+                    elif "期现" in active_strat or "资金费率" in active_strat:
+                        swap_sym = f"{raw_symbol}:USDT"
+                        if not funding_arb_active:
+                            if usdt_free >= order_usdt * 2:
+                                half_usdt = order_usdt
+                                self.append_log(f"【期现套利】对冲建仓中：买入现货 {half_usdt}U 并做空等值永续合约...")
+                                spot_qty = self.calc_order_qty(raw_symbol, half_usdt, current_price)
+                                self.exchange.create_market_buy_order(raw_symbol, spot_qty)
+
+                                swap_contracts = self.calc_order_qty(swap_sym, half_usdt, current_price)
+                                self.exchange.create_market_sell_order(swap_sym, swap_contracts)
+                                
+                                funding_arb_active = True
+                                self.append_log("【期现套利】Delta 中性对冲建立完毕，正在静候资金费率结算！")
+                        else:
+                            fr = self.latest_market_metrics.get('funding_rate', 0.0)
+                            if fr < -0.0001:
+                                self.append_log("【期现套利】资金费率逆转为负，平仓以规避费率磨损...")
+                                self.execute_market_close(raw_symbol, True, base_currency)
+                                self.execute_market_close(swap_sym, False, base_currency)
+                                funding_arb_active = False
+
+                    elif "CTA" in active_strat or "趋势追踪" in active_strat:
+                        ema9 = self.latest_market_metrics.get('ema9', current_price)
+                        ema21 = self.latest_market_metrics.get('ema21', current_price)
+
+                        if ema9 > ema21 * 1.0025 and trend_position != 'long' and len(open_orders) == 0:
+                            if trend_position == 'short':
+                                self.execute_market_close(symbol, is_spot, base_currency)
+                            order_qty = self.calc_order_qty(symbol, order_usdt, current_price)
+                            if usdt_free >= order_usdt:
+                                self.append_log(f"【日内CTA】EMA9 上穿 EMA21！多头确立，买入做多: {order_qty}")
+                                self.exchange.create_market_buy_order(symbol, order_qty)
+                                trend_position = 'long'
+                                initial_entry_price = current_price
+
+                        elif ema9 < ema21 * 0.9975 and trend_position != 'short':
+                            if trend_position == 'long':
+                                self.append_log("【日内CTA】EMA9 下穿 EMA21！多头趋势衰竭，市价平多...")
+                                self.execute_market_close(symbol, is_spot, base_currency)
+                                trend_position = None
+                                initial_entry_price = None
+
+                            if not is_spot and trend_position is None and len(open_orders) == 0:
+                                order_qty = self.calc_order_qty(symbol, order_usdt, current_price)
+                                self.append_log(f"【日内CTA】空头突破确认，开空: {order_qty} 张")
+                                self.exchange.create_market_sell_order(symbol, order_qty)
+                                trend_position = 'short'
+                                initial_entry_price = current_price
+
+                    elif "TWAP" in active_strat or "冰山" in active_strat:
+                        if twap_slices_executed < 5:
+                            slice_usdt = order_usdt / 5.0
+                            if usdt_free >= slice_usdt:
+                                slice_qty = self.calc_order_qty(symbol, slice_usdt, current_price)
+                                best_bid = float(self.exchange.price_to_precision(symbol, current_price * 0.9995))
+                                self.append_log(f"【TWAP/冰山】隐蔽挂出第 {twap_slices_executed+1}/5 笔微单: {slice_qty} @ {best_bid}")
+                                self.exchange.create_limit_buy_order(symbol, slice_qty, best_bid)
+                                twap_slices_executed += 1
+                        else:
+                            self.append_log("【TWAP/冰山】目标切片全额执行完毕，退出单次任务。")
+                            self.running = False
+                            break
+
+                    consecutive_net_errors = 0
+                    for _ in range(10):
+                        if not self.running:
+                            break
+                        time.sleep(1)
+
+                except Exception as loop_err:
+                    consecutive_net_errors += 1
+                    err_msg = str(loop_err)
+                    if "timed out" in err_msg.lower() or "connection" in err_msg.lower():
+                        sleep_time = min(60, consecutive_net_errors * 10)
+                        self.append_log(f"网络断开 ({consecutive_net_errors}次)，熔断休眠 {sleep_time}s...")
+                        time.sleep(sleep_time)
+                    else:
+                        self.append_log(f"轮询警告: {err_msg[:35]}")
+                        time.sleep(5)
+
+        except Exception as e:
+            self.append_log(f"主线程异常退出: {str(e)[:35]}")
+            self.running = False
+        finally:
+            if self.exchange and '自动撤销' in self.active_cancel_on_stop and self.current_symbol:
+                try:
+                    self.append_log("停机保护：正在撤销盘口活跃挂单...")
+                    active_orders = self.exchange.fetch_open_orders(self.current_symbol)
+                    for o in active_orders:
+                        try:
+                            self.exchange.cancel_order(o['id'], self.current_symbol)
+                        except Exception:
+                            pass
+                    self.active_strategy_orders.clear()
+                    self.refresh_orders_view([])
+                    self.append_log(f"已清理全部盘口挂单 ({len(active_orders)} 笔)。")
+                except Exception as cancel_err:
+                    self.append_log(f"撤单失败: {str(cancel_err)[:30]}")
+
+            Clock.schedule_once(lambda dt: self.toggle_btn.set_bg((0.04, 0.55, 0.32, 1)))
+            Clock.schedule_once(lambda dt: setattr(self.toggle_btn, 'text', "启动日内高胜率策略"))
+            Clock.schedule_once(lambda dt: setattr(self.status_lbl, 'text', "已停机就绪"))
+            Clock.schedule_once(lambda dt: setattr(self.status_lbl, 'color', C_AMBER))
+
+
+if __name__ == '__main__':
+    OKXProQuantStationApp().run()
